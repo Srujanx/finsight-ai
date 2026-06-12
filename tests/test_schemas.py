@@ -1,17 +1,19 @@
+from typing import Any
+
 import pytest
 from pydantic import ValidationError
 
 from finsight.schemas.models import Evidence, InvestmentMemo, MemoSection
 
 
-def make_evidence(**overrides) -> Evidence:
-    base = dict(
-        id="news01",
-        source="news",
-        title="NVDA ships new chips",
-        url="https://example.com/article",
-        content="NVIDIA announced a new accelerator today.",
-    )
+def make_evidence(**overrides: Any) -> Evidence:
+    base: dict[str, Any] = {
+        "id": "news_01",
+        "source_type": "news",
+        "title": "NVDA ships new chips",
+        "url": "https://example.com/article",
+        "content": "NVIDIA announced a new accelerator today.",
+    }
 
     base.update(overrides)
     return Evidence(**base)
