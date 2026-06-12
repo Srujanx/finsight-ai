@@ -1,4 +1,5 @@
 # FinSight AI
+![CI](https://github.com/srujanx/finsight-ai/actions/workflows/ci.yml/badge.svg)
 
 **An autonomous AI research analyst for US equities.**
 
