@@ -46,3 +46,13 @@ class InvestmentMemo(BaseModel):
     sentiment: dict = Field(default_factory=dict)
     open_questions: list[str] = Field(default_factory=list)
     disclaimer: str = Field(min_length=1)
+
+
+class ResearchPlan(BaseModel):
+    # What the planner decides on a gicen ticker. LLM emits this shape
+
+    company_name: str = Field(min_length=1)
+    sector: str = Field(min_length=1)
+    is_us_listed: bool
+    key_metrics_to_check: list[str] = Field(min_length=1)  # sector-specific KPIs
+    news_search_terms: list[str] = Field(min_length=1)
