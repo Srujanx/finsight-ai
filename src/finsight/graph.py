@@ -7,9 +7,19 @@ from datetime import UTC, datetime
 
 from langgraph.graph import END, START, StateGraph
 
+from finsight.planner import make_plan
 from finsight.schemas.models import Evidence
 from finsight.state import AgentState
 from finsight.tracer import build_prompt, generate_memo, get_headlines, get_snapshot
+
+
+def planner_node(state: AgentState) -> dict:
+    # First Agentic decision point: First define what matters for this company
+    try:
+        plan = make_plan(state["ticker"])
+        return {"plan": plan}
+    except Exception as exc:
+        return {"errors": [f"planner failed: {exc}"]}
 
 
 def fetch_market_node(state: AgentState) -> dict:
@@ -71,12 +81,17 @@ def synthesize_node(state: AgentState) -> dict:
 def build_graph():
     """Wire the nodes into a linear StateGraph."""
     graph = StateGraph(AgentState)
+    graph.add_node("planner", planner_node)
     graph.add_node("fetch_market", fetch_market_node)
     graph.add_node("fetch_news", fetch_news_node)
     graph.add_node("synthesize", synthesize_node)
 
-    graph.add_edge(START, "fetch_market")
-    graph.add_edge("fetch_market", "fetch_news")
+    graph.add_edge(START, "planner")
+    # Fan-out: BOTH fetchers branch off the planner and run concurrently.
+    graph.add_edge("planner", "fetch_market")
+    graph.add_edge("planner", "fetch_news")
+    # Fan-in: synthesize waits for BOTH fetchers to finish.
+    graph.add_edge("fetch_market", "synthesize")
     graph.add_edge("fetch_news", "synthesize")
     graph.add_edge("synthesize", END)
 

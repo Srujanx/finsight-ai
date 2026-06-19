@@ -8,7 +8,7 @@ spine of the while agent hangs on.
 import operator
 from typing import Annotated, TypedDict
 
-from finsight.schemas.models import Evidence
+from finsight.schemas.models import Evidence, ResearchPlan
 
 
 class AgentState(TypedDict):
@@ -21,6 +21,7 @@ class AgentState(TypedDict):
     """
 
     ticker: str
+    plan: ResearchPlan | None
     evidence: Annotated[list[Evidence], operator.add]
     memo_markdown: str | None
     errors: Annotated[list[str], operator.add]
@@ -30,6 +31,7 @@ def new_state(ticker: str) -> AgentState:
     # Build the initial state for run
     return {
         "ticker": ticker,
+        "plan": None,
         "evidence": [],
         "memo_markdown": None,
         "errors": [],
