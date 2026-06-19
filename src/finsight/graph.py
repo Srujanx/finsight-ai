@@ -1,12 +1,11 @@
 """The LangGraph StateGraph: planner -> parallel fetchers -> synthesize -> END."""
 
-import os
 from datetime import date
 from pathlib import Path
 
-from google import genai
 from langgraph.graph import END, START, StateGraph
 
+from finsight.llm import generate_structured
 from finsight.planner import make_plan
 from finsight.schemas.models import Evidence, InvestmentMemo, Snapshot
 from finsight.state import AgentState
@@ -81,23 +80,12 @@ def synthesize_node(state: AgentState) -> dict:
         evidence=_format_evidence(evidence),
     )
 
-    client = genai.Client(api_key=os.environ["GEMINI_API_KEY"])
     try:
-        response = client.models.generate_content(
+        memo = generate_structured(
             model="gemini-2.5-flash",
-            contents=prompt,
-            config={
-                "response_mime_type": "application/json",
-                "response_schema": InvestmentMemo,
-            },
+            prompt=prompt,
+            schema=InvestmentMemo,
         )
-        memo = response.parsed
-        if not isinstance(memo, InvestmentMemo):
-            return {"errors": [f"synthesize: unparseable memo ({type(memo)})"]}
-        all_sections = [memo.thesis, *memo.opportunities, *memo.risks]
-        ungrounded = [s.heading for s in all_sections if not s.evidence_ids]
-        if ungrounded:
-            return {"errors": [f"synthesize: sections without evidence: {ungrounded}"]}
         memo.ticker = state["ticker"]
         memo.as_of = date.today().isoformat()
         snap_ev = next((e for e in evidence if e.source_type == "market"), None)
@@ -111,6 +99,10 @@ def synthesize_node(state: AgentState) -> dict:
                 fifty_two_week_low=m.get("fifty_two_week_low", ""),
                 sector=m.get("sector", ""),
             )
+        all_sections = [memo.thesis, *memo.opportunities, *memo.risks]
+        ungrounded = [s.heading for s in all_sections if not s.evidence_ids]
+        if ungrounded:
+            return {"errors": [f"grounding violated — uncited sections: {ungrounded}"]}
         return {"memo": memo}
     except Exception as exc:
         return {"errors": [f"synthesize failed: {exc}"]}
