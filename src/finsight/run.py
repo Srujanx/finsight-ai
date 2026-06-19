@@ -6,6 +6,7 @@ Run with:  uv run python -m finsight.run NVDA
 import sys
 
 from dotenv import load_dotenv
+from langfuse.langchain import CallbackHandler
 
 from finsight.cache import get_cached_memo, save_memo
 from finsight.graph import build_graph
@@ -24,7 +25,11 @@ def main() -> None:
     else:
         print(f"-> cache MISS — running graph for {ticker}...", flush=True)
         app = build_graph()
-        final_state = app.invoke(new_state(ticker))
+        langfuse_handler = CallbackHandler()
+        final_state = app.invoke(
+            new_state(ticker),
+            config={"callbacks": [langfuse_handler]},
+        )
         memo = final_state.get("memo")
         if memo is not None:
             save_memo(memo)

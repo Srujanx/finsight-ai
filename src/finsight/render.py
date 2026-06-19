@@ -9,15 +9,17 @@ def _section_md(section: MemoSection) -> str:
 
 def memo_to_markdown(memo: InvestmentMemo) -> str:
     parts = [f"# {memo.company} ({memo.ticker})", f"_As of {memo.as_of}_\n"]
-    if memo.snapshot:
-        snap = ", ".join(f"{k} : {v}" for k, v in memo.snapshot.items() if v is not None)
-        parts.append(f"**Snapshot:** {snap}\n")
+    snap = memo.snapshot
+    parts.append(
+        f"**Snapshot:** price {snap.price}, mkt cap {snap.market_cap}, "
+        f"P/E {snap.pe_ratio}, 52w {snap.fifty_two_week_low}–{snap.fifty_two_week_high}\n"
+    )
     parts.append(_section_md(memo.thesis))
     if memo.opportunities:
-        parts.append("#Opportunities\n")
+        parts.append("##Opportunities\n")
         parts.extend(_section_md(s) for s in memo.opportunities)
     if memo.risks:
-        parts.append("##Risks/n")
+        parts.append("##Risks\n")
         parts.extend(_section_md(s) for s in memo.risks)
     if memo.open_questions:
         parts.append("## Open Questions\n")

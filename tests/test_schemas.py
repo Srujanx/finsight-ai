@@ -3,7 +3,7 @@ from typing import Any
 import pytest
 from pydantic import ValidationError
 
-from finsight.schemas.models import Evidence, InvestmentMemo, MemoSection
+from finsight.schemas.models import Evidence, InvestmentMemo, MemoSection, Snapshot
 
 
 def make_evidence(**overrides: Any) -> Evidence:
@@ -30,9 +30,11 @@ def test_evidence_rejects_unknown_source_type():
         make_evidence(source_type="rumor")
 
 
-def test_memo_section_required_at_least_one_evidence():
-    with pytest.raises(ValidationError):
-        MemoSection(heading="Risks", body_md="Something risky.", evidence_ids=[])
+def test_memo_section_allows_empty_evidence_at_schema_level():
+    # Schema is shape-only for Gemini free-tier compatibility;
+    # the grounding contract is enforced in synthesize_node, not here.
+    section = MemoSection(heading="Risks", body_md="Something.", evidence_ids=[])
+    assert section.evidence_ids == []
 
 
 def test_memo_section_with_evidence_passes():
@@ -46,7 +48,7 @@ def test_full_memo_build():
         ticker="NVDA",
         company="NVIDIA Corperation",
         as_of="2026-06-13",
-        snapshot={"price": 123.45},
+        snapshot=Snapshot(price="123.45"),
         thesis=thesis,
         disclaimer="Educational tool. Not Investment Advice.",
     )
