@@ -55,3 +55,18 @@ class ResearchPlan(BaseModel):
     is_us_listed: bool
     key_metrics_to_check: list[str]
     news_search_terms: list[str]
+
+
+class ExtractedInsights(BaseModel):
+    """One risk or theme distiled from filing section"""
+
+    label: str  # short name, e.g. "Supply chain concentration"
+    summary: str  # One sentence in plain english
+    evidence_id: str  # which filing Evidence this came from
+
+
+class FilingInsights(BaseModel):
+    """What extraction node returns for every filings"""
+
+    risks: list[ExtractedInsights]
+    themes: list[ExtractedInsights]

@@ -8,7 +8,7 @@ from langgraph.graph import END, START, StateGraph
 from finsight.filings import fetch_filing_evidence
 from finsight.llm import generate_structured
 from finsight.planner import make_plan
-from finsight.schemas.models import Evidence, InvestmentMemo, Snapshot
+from finsight.schemas.models import Evidence, FilingInsights, InvestmentMemo, Snapshot
 from finsight.state import AgentState
 from finsight.tracer import get_headlines, get_snapshot
 
@@ -81,6 +81,53 @@ def _format_evidence(evidence: list[Evidence]) -> str:
     return "\n".join(lines)
 
 
+_EXTRACT_PROMPT = Path(__file__).resolve().parents[2] / "prompts" / "extract_insights_v1.md"
+
+
+def extract_insights_node(state: AgentState) -> dict:
+    """Map step: distill filing sections into typed insights (Flash-Lite, cheap)."""
+    filing_evidence = [e for e in state["evidence"] if e.source_type == "filing"]
+    if not filing_evidence:
+        return {}  # no filings to extract from; not an error, just skip
+
+    insights_text_parts = []
+    for ev in filing_evidence:
+        prompt = _EXTRACT_PROMPT.read_text().format(
+            ticker=state["ticker"],
+            evidence_id=ev.id,
+            section_text=ev.content,
+        )
+        try:
+            insights = generate_structured(
+                model="gemini-2.5-flash-lite",
+                prompt=prompt,
+                schema=FilingInsights,
+            )
+            for risk in insights.risks:
+                insights_text_parts.append(
+                    f"RISK [{risk.evidence_id}]: {risk.label} — {risk.summary}"
+                )
+            for theme in insights.themes:
+                insights_text_parts.append(
+                    f"THEME [{theme.evidence_id}]: {theme.label} — {theme.summary}"
+                )
+        except Exception as exc:
+            return {"errors": [f"extract_insights failed: {exc}"]}
+
+    if not insights_text_parts:
+        return {}
+
+    # Add the distilled insights as a new Evidence item synthesis can cite.
+    digest = Evidence(
+        id="filing_insights",
+        source_type="filing",
+        title=f"{state['ticker']} distilled filing insights",
+        content="\n".join(insights_text_parts),
+        meta={"derived": "extraction"},
+    )
+    return {"evidence": [digest]}
+
+
 def synthesize_node(state: AgentState) -> dict:
     """Produce a validated InvestmentMemo. Structured output + grounding contract."""
     evidence = state["evidence"]
@@ -121,21 +168,29 @@ def synthesize_node(state: AgentState) -> dict:
 
 
 def build_graph():
-    """Wire the nodes: planner -> parallel fetchers -> synthesize -> END."""
+    """Wire the nodes: planner -> 3 parallel fetchers -> extract_insights -> synthesize -> END."""
     graph = StateGraph(AgentState)
     graph.add_node("planner", planner_node)
     graph.add_node("fetch_market", fetch_market_node)
-    graph.add_node("fetch_filings", fetch_filings_node)
     graph.add_node("fetch_news", fetch_news_node)
+    graph.add_node("fetch_filings", fetch_filings_node)
+    graph.add_node("extract_insights", extract_insights_node)
     graph.add_node("synthesize", synthesize_node)
 
     graph.add_edge(START, "planner")
+
+    # Fan-out: three fetchers run concurrently off the planner.
     graph.add_edge("planner", "fetch_market")
     graph.add_edge("planner", "fetch_news")
-    graph.add_edge("fetch_market", "synthesize")
-    graph.add_edge("fetch_news", "synthesize")
     graph.add_edge("planner", "fetch_filings")
-    graph.add_edge("fetch_filings", "synthesize")
+
+    # Fan-in: all three rejoin at extract_insights.
+    graph.add_edge("fetch_market", "extract_insights")
+    graph.add_edge("fetch_news", "extract_insights")
+    graph.add_edge("fetch_filings", "extract_insights")
+
+    # Then the linear tail.
+    graph.add_edge("extract_insights", "synthesize")
     graph.add_edge("synthesize", END)
 
     return graph.compile()
