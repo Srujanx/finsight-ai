@@ -8,7 +8,7 @@ spine of the while agent hangs on.
 import operator
 from typing import Annotated, TypedDict
 
-from finsight.schemas.models import Evidence, InvestmentMemo, ResearchPlan
+from finsight.schemas.models import CriticVerdict, Evidence, InvestmentMemo, ResearchPlan
 
 
 class AgentState(TypedDict):
@@ -24,6 +24,8 @@ class AgentState(TypedDict):
     plan: ResearchPlan | None
     evidence: Annotated[list[Evidence], operator.add]
     memo: InvestmentMemo | None
+    critique: CriticVerdict | None
+    revision_count: int
     errors: Annotated[list[str], operator.add]
 
 
@@ -34,5 +36,7 @@ def new_state(ticker: str) -> AgentState:
         "plan": None,
         "evidence": [],
         "memo": None,
+        "critique": None,
+        "revision_count": 0,
         "errors": [],
     }

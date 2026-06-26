@@ -70,3 +70,19 @@ class FilingInsights(BaseModel):
 
     risks: list[ExtractedInsights]
     themes: list[ExtractedInsights]
+
+
+class ClaimCheck(BaseModel):
+    """One claim judged against its cited evidence"""
+
+    claim: str  # specific statement being checked
+    supported: bool  # is it backed by cited evidence
+    reason: str  # why or why not
+
+
+class CriticVerdict(BaseModel):
+    """The critic's full assessment as a memo"""
+
+    checks: list[ClaimCheck]
+    overall_pass: bool  # True if all claims are supported
+    revision_guidance: str  # if failing, what synthesis should fix
