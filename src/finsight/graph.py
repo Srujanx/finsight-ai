@@ -8,7 +8,14 @@ from langgraph.graph import END, START, StateGraph
 from finsight.filings import fetch_filing_evidence
 from finsight.llm import generate_structured
 from finsight.planner import make_plan
-from finsight.schemas.models import Evidence, FilingInsights, InvestmentMemo, Snapshot
+from finsight.render import memo_to_markdown
+from finsight.schemas.models import (
+    CriticVerdict,
+    Evidence,
+    FilingInsights,
+    InvestmentMemo,
+    Snapshot,
+)
 from finsight.state import AgentState
 from finsight.tracer import get_headlines, get_snapshot
 
@@ -134,9 +141,17 @@ def synthesize_node(state: AgentState) -> dict:
     if not evidence:
         return {"errors": ["synthesize: no evidence to work with"]}
 
-    prompt = _SYNTH_PROMPT.read_text().format(
-        ticker=state["ticker"],
-        evidence=_format_evidence(evidence),
+    critique = state.get("critique")
+    revision_note = ""
+    if critique is not None and not critique.overall_pass:
+        revision_note = f"\n\nREVISION REQUESTED. Fix these issues:\n{critique.revision_guidance}"
+
+    prompt = (
+        _SYNTH_PROMPT.read_text().format(
+            ticker=state["ticker"],
+            evidence=_format_evidence(evidence),
+        )
+        + revision_note
     )
 
     try:
@@ -167,6 +182,44 @@ def synthesize_node(state: AgentState) -> dict:
         return {"errors": [f"synthesize failed: {exc}"]}
 
 
+_CRITIC_PROMPT = Path(__file__).resolve().parents[2] / "prompts" / "critic_v1.md"
+
+
+def critic_node(state: AgentState) -> dict:
+    """Evaluator: check every memo claim against its cited evidence (binary)."""
+    memo = state["memo"]
+    if memo is None:
+        return {"errors": ["critic: no memo to check"]}
+    prompt = _CRITIC_PROMPT.read_text().format(
+        evidence=_format_evidence(state["evidence"]),
+        memo=memo_to_markdown(memo),
+    )
+    try:
+        verdict = generate_structured(
+            model="gemini-2.5-flash",
+            prompt=prompt,
+            schema=CriticVerdict,
+        )
+        return {"critique": verdict}
+    except Exception as exc:
+        # If the critic itself fails, don't block the memo — log and pass through.
+        return {"errors": [f"critic failed(memo kept as in): {exc}"]}
+
+
+def route_after_critic(state: AgentState) -> str:
+    """Decide if to revide once or finsih"""
+    critique = state["critique"]
+    # Finish if: critic passed, critic errored (no verdict), or we already revised.
+    if critique is None or critique.overall_pass or state["revision_count"] >= 1:
+        return "finalize"
+    return "revise"
+
+
+def finalize_node(state: AgentState) -> dict:
+    """Terminal node. The memo is done; this is where persistence/indexing will go."""
+    return {}
+
+
 def build_graph():
     """Wire the nodes: planner -> 3 parallel fetchers -> extract_insights -> synthesize -> END."""
     graph = StateGraph(AgentState)
@@ -176,6 +229,8 @@ def build_graph():
     graph.add_node("fetch_filings", fetch_filings_node)
     graph.add_node("extract_insights", extract_insights_node)
     graph.add_node("synthesize", synthesize_node)
+    graph.add_node("critic", critic_node)
+    graph.add_node("finalize", finalize_node)
 
     graph.add_edge(START, "planner")
 
@@ -191,6 +246,12 @@ def build_graph():
 
     # Then the linear tail.
     graph.add_edge("extract_insights", "synthesize")
-    graph.add_edge("synthesize", END)
+    graph.add_edge("synthesize", "critic")
+    graph.add_conditional_edges(
+        "critic",
+        route_after_critic,
+        {"revise": "synthesize", "finalize": "finalize"},
+    )
+    graph.add_edge("finalize", END)
 
     return graph.compile()
