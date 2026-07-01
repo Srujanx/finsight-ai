@@ -3,9 +3,12 @@
 Knows nothing about LangGraph — just turns service events into SSE.
 """
 
+from pathlib import Path
+
 from dotenv import load_dotenv
 from fastapi import FastAPI, Request
 from fastapi.middleware.cors import CORSMiddleware
+from fastapi.staticfiles import StaticFiles
 from slowapi import Limiter
 from slowapi.util import get_remote_address
 from sse_starlette.sse import EventSourceResponse
@@ -47,3 +50,9 @@ async def memo(request: Request, ticker: str):
             yield {"data": json.dumps(event)}
 
     return EventSourceResponse(event_generator())
+
+
+# Serve the built React app. Must be LAST so /api routes take precedence.
+_DIST = Path(__file__).resolve().parents[2] / "web" / "dist"
+if _DIST.exists():
+    app.mount("/", StaticFiles(directory=str(_DIST), html=True), name="static")

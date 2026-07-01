@@ -1,4 +1,15 @@
+---
+title: FinSight AI
+emoji: 📈
+colorFrom: blue
+colorTo: green
+sdk: docker
+app_port: 7860
+pinned: false
+---
+
 # FinSight AI
+
 ![CI](https://github.com/srujanx/finsight-ai/actions/workflows/ci.yml/badge.svg)
 
 **An autonomous AI research analyst for US equities.**
@@ -88,5 +99,5 @@ Embeddings: bge-small-en-v1.5 (local)
 Observability: Langfuse
 Deployment: Docker → Hugging Face Spaces
 
-## Disclaimer 
-FinSight AI is an educational demonstration tool.Always do your own research and consult qualified financial professionals. Past performance is not indicative of future results. I am not responsible for your loss. 
+## Disclaimer
+FinSight AI is an educational demonstration tool.Always do your own research and consult qualified financial professionals. Past performance is not indicative of future results. I am not responsible for your loss.
