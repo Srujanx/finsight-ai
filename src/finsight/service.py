@@ -44,12 +44,15 @@ async def run_memo_stream(ticker: str) -> AsyncIterator[dict[str, Any]]:
     app = build_graph()
     final_state: dict[str, Any] = {}
 
-    # stream_mode="updates" yields {node_name: partial_state} after each node.
-    async for chunk in app.astream(new_state(ticker), stream_mode="updates"):
-        for node_name, node_update in chunk.items():
-            label = _NODE_LABELS.get(node_name, f"{node_name}…")
-            yield {"type": "progress", "step": node_name, "label": label}
-            final_state.update(node_update)
+    async for mode, chunk in app.astream(new_state(ticker), stream_mode=["updates", "values"]):
+        if mode == "updates":
+            # chunk is {node_name: partial} — emit progress.
+            for node_name in chunk:
+                label = _NODE_LABELS.get(node_name, f"{node_name}…")
+                yield {"type": "progress", "step": node_name, "label": label}
+        elif mode == "values":
+            # chunk is the full state snapshot — keep the latest as authoritative.
+            final_state = chunk  # type: ignore[assignment]
 
     memo = final_state.get("memo")
     if memo is not None:

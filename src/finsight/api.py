@@ -3,6 +3,7 @@
 Knows nothing about LangGraph — just turns service events into SSE.
 """
 
+from dotenv import load_dotenv
 from fastapi import FastAPI, Request
 from fastapi.middleware.cors import CORSMiddleware
 from slowapi import Limiter
@@ -10,6 +11,10 @@ from slowapi.util import get_remote_address
 from sse_starlette.sse import EventSourceResponse
 
 from finsight.service import run_memo_stream
+
+load_dotenv()
+
+app = FastAPI(title="FinSight AI")
 
 limiter = Limiter(key_func=get_remote_address)
 app = FastAPI(title="FinSight AI")
